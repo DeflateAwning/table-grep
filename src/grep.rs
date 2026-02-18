@@ -96,11 +96,10 @@ fn search_csv(
                 }
             }
 
-            if let Some(max) = cli.max_count {
-                if match_count >= max {
+            if let Some(max) = cli.max_count
+                && match_count >= max {
                     break;
                 }
-            }
         }
     }
 
@@ -171,11 +170,10 @@ fn search_parquet(
                     }
                 }
 
-                if let Some(max) = cli.max_count {
-                    if match_count >= max {
+                if let Some(max) = cli.max_count
+                    && match_count >= max {
                         break 'outer;
                     }
-                }
             }
         }
     }
@@ -232,12 +230,11 @@ fn print_only_matching(
     };
 
     for idx in indices_to_check {
-        if let Some(cell) = row.get(idx) {
-            if pattern.is_match(cell) {
+        if let Some(cell) = row.get(idx)
+            && pattern.is_match(cell) {
                 let col_name = headers.get(idx).map(|s| s.as_str()).unwrap_or("?");
                 println!("  [{}] {}", col_name, cell);
             }
-        }
     }
 }
 
