@@ -1,6 +1,15 @@
 use anyhow::Result;
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use regex::{Regex, RegexBuilder};
+
+/// Output format for matching rows
+#[derive(Debug, Clone, Copy, PartialEq, ValueEnum)]
+pub enum OutputFormat {
+    /// Comma-separated values (default, grep-like)
+    Csv,
+    /// Pretty-printed table with borders
+    Table,
+}
 
 /// table-grep: grep through CSV and Parquet table files
 #[derive(Parser, Debug)]
@@ -57,6 +66,16 @@ pub struct Cli {
     /// Disable color output
     #[arg(long)]
     pub no_color: bool,
+
+    /// Output format for matching rows [csv, table]
+    #[arg(
+        long,
+        short = 'f',
+        value_enum,
+        default_value_t = OutputFormat::Csv,
+        value_name = "FORMAT"
+    )]
+    pub format: OutputFormat,
 }
 
 impl Cli {
