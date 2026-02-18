@@ -94,3 +94,7 @@ col1,col2,col3          ← column headers (dimmed)
 5: Alice,28,Designer
 ---
 ```
+
+## Inspiration
+
+* Similar Project: https://github.com/hyparam/parquet-grep
