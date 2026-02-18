@@ -1,4 +1,4 @@
-use crate::cli::Cli;
+use crate::cli::{Cli, OutputFormat};
 use crate::output::Printer;
 use anyhow::Result;
 use regex::Regex;
@@ -9,16 +9,50 @@ pub fn search_file(path: &Path, pattern: &Regex, cli: &Cli) -> Result<()> {
     let use_color = !cli.no_color && atty::is(atty::Stream::Stdout);
     let show_filename = !cli.no_filename;
 
-    let printer = Printer::new(use_color, show_filename);
+    let printer = Printer::new(use_color, show_filename, cli.format);
 
     match path.extension().and_then(|e| e.to_str()) {
         Some("csv") => search_csv(path, &filename, pattern, cli, &printer),
         Some("parquet") => search_parquet(path, &filename, pattern, cli, &printer),
-        _ => Ok(()), // already filtered by main
+        _ => Ok(()),
     }
 }
 
-// ── CSV ──────────────────────────────────────────────────────────────────────
+// ── shared output logic ───────────────────────────────────────────────────────
+
+/// Emit the collected matching rows in whichever format the user chose.
+fn emit_matches(
+    filename: &str,
+    headers: &[String],
+    matches: &[(usize, Vec<String>)],
+    pattern: &Regex,
+    cli: &Cli,
+    printer: &Printer,
+) {
+    if matches.is_empty() {
+        return;
+    }
+
+    printer.print_file_header(filename);
+
+    match printer.format {
+        OutputFormat::Csv => {
+            if cli.with_headers {
+                printer.print_headers(headers);
+            }
+            for (row_num, row) in matches {
+                printer.print_match(*row_num, row, pattern);
+            }
+            printer.print_separator();
+        }
+        OutputFormat::Table => {
+            // print_table handles its own header row
+            printer.print_table(headers, matches, pattern, cli.with_headers);
+        }
+    }
+}
+
+// ── CSV ───────────────────────────────────────────────────────────────────────
 
 fn search_csv(
     path: &Path,
@@ -32,15 +66,13 @@ fn search_csv(
         .from_path(path)
         .map_err(|e| anyhow::anyhow!("Failed to open CSV '{}': {}", filename, e))?;
 
-    // Collect headers
     let headers: Vec<String> = rdr.headers()?.iter().map(|h| h.to_string()).collect();
 
-    // Resolve column filter indices
     let col_indices = resolve_column_indices(&headers, &cli.columns);
 
     let mut match_count = 0usize;
     let mut row_num = 0usize;
-    let mut printed_file_header = false;
+    let mut matched_rows: Vec<(usize, Vec<String>)> = Vec::new();
 
     for result in rdr.records() {
         let record =
@@ -48,41 +80,34 @@ fn search_csv(
         row_num += 1;
 
         let row: Vec<String> = record.iter().map(|f| f.to_string()).collect();
-        let matched = row_matches(&row, pattern, &col_indices, cli.invert);
 
-        if matched {
-            if !printed_file_header {
-                printer.print_file_header(filename);
-                if cli.with_headers && !cli.count {
-                    printer.print_headers(&headers);
-                }
-                printed_file_header = true;
-            }
-
+        if row_matches(&row, pattern, &col_indices, cli.invert) {
             match_count += 1;
 
             if !cli.count {
                 if cli.only_matching {
+                    // only_matching bypasses the buffering path
+                    if matched_rows.is_empty() {
+                        printer.print_file_header(filename);
+                    }
                     print_only_matching(&row, &headers, pattern, &col_indices);
                 } else {
-                    printer.print_match(row_num, &row, pattern);
+                    matched_rows.push((row_num, row));
                 }
             }
 
-            if let Some(max) = cli.max_count
-                && match_count >= max
-            {
-                break;
+            if let Some(max) = cli.max_count {
+                if match_count >= max {
+                    break;
+                }
             }
         }
     }
 
     if cli.count && match_count > 0 {
         printer.print_count(filename, match_count);
-    }
-
-    if printed_file_header && !cli.count {
-        printer.print_separator();
+    } else if !cli.only_matching {
+        emit_matches(filename, &headers, &matched_rows, pattern, cli, printer);
     }
 
     Ok(())
@@ -109,7 +134,6 @@ fn search_parquet(
     let schema = builder.schema().clone();
     let headers: Vec<String> = schema.fields().iter().map(|f| f.name().clone()).collect();
 
-    // Resolve column filter indices
     let col_indices = resolve_column_indices(&headers, &cli.columns);
 
     let reader = builder
@@ -118,49 +142,39 @@ fn search_parquet(
 
     let mut match_count = 0usize;
     let mut global_row_num = 0usize;
-    let mut printed_file_header = false;
+    let mut matched_rows: Vec<(usize, Vec<String>)> = Vec::new();
 
     'outer: for batch_result in reader {
         let batch = batch_result
             .map_err(|e| anyhow::anyhow!("Parquet batch error in '{}': {}", filename, e))?;
 
-        let num_rows = batch.num_rows();
-
-        for row_idx in 0..num_rows {
+        for row_idx in 0..batch.num_rows() {
             global_row_num += 1;
 
-            // Convert this row to Vec<String>
             let row: Vec<String> = batch
                 .columns()
                 .iter()
                 .map(|col| array_value_to_string(col.as_ref(), row_idx))
                 .collect();
 
-            let matched = row_matches(&row, pattern, &col_indices, cli.invert);
-
-            if matched {
-                if !printed_file_header {
-                    printer.print_file_header(filename);
-                    if cli.with_headers && !cli.count {
-                        printer.print_headers(&headers);
-                    }
-                    printed_file_header = true;
-                }
-
+            if row_matches(&row, pattern, &col_indices, cli.invert) {
                 match_count += 1;
 
                 if !cli.count {
                     if cli.only_matching {
+                        if matched_rows.is_empty() {
+                            printer.print_file_header(filename);
+                        }
                         print_only_matching(&row, &headers, pattern, &col_indices);
                     } else {
-                        printer.print_match(global_row_num, &row, pattern);
+                        matched_rows.push((global_row_num, row));
                     }
                 }
 
-                if let Some(max) = cli.max_count
-                    && match_count >= max
-                {
-                    break 'outer;
+                if let Some(max) = cli.max_count {
+                    if match_count >= max {
+                        break 'outer;
+                    }
                 }
             }
         }
@@ -168,18 +182,15 @@ fn search_parquet(
 
     if cli.count && match_count > 0 {
         printer.print_count(filename, match_count);
-    }
-
-    if printed_file_header && !cli.count {
-        printer.print_separator();
+    } else if !cli.only_matching {
+        emit_matches(filename, &headers, &matched_rows, pattern, cli, printer);
     }
 
     Ok(())
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── helpers ───────────────────────────────────────────────────────────────────
 
-/// Determine which column indices to check. None means all columns.
 fn resolve_column_indices(headers: &[String], filter: &Option<Vec<String>>) -> Option<Vec<usize>> {
     filter.as_ref().map(|cols| {
         cols.iter()
@@ -194,8 +205,7 @@ fn resolve_column_indices(headers: &[String], filter: &Option<Vec<String>>) -> O
     })
 }
 
-/// Returns true if the row matches (or doesn't match when inverted).
-fn row_matches(
+pub fn row_matches(
     row: &[String],
     pattern: &Regex,
     col_indices: &Option<Vec<usize>>,
@@ -210,7 +220,6 @@ fn row_matches(
     if invert { !any_match } else { any_match }
 }
 
-/// Print only the matching cells with their column names.
 fn print_only_matching(
     row: &[String],
     headers: &[String],
@@ -223,16 +232,15 @@ fn print_only_matching(
     };
 
     for idx in indices_to_check {
-        if let Some(cell) = row.get(idx)
-            && pattern.is_match(cell)
-        {
-            let col_name = headers.get(idx).map(|s| s.as_str()).unwrap_or("?");
-            println!("  [{}] {}", col_name, cell);
+        if let Some(cell) = row.get(idx) {
+            if pattern.is_match(cell) {
+                let col_name = headers.get(idx).map(|s| s.as_str()).unwrap_or("?");
+                println!("  [{}] {}", col_name, cell);
+            }
         }
     }
 }
 
-/// Convert any Arrow array element to a string representation.
 fn array_value_to_string(array: &dyn arrow::array::Array, index: usize) -> String {
     use arrow::array::*;
     use arrow::datatypes::DataType;
@@ -325,13 +333,11 @@ fn array_value_to_string(array: &dyn arrow::array::Array, index: usize) -> Strin
                     .unwrap_or_else(|| a.value(index).to_string())
             })
             .unwrap_or_default(),
-        DataType::Timestamp(_, _) => {
-            // Generic fallback via cast to string
-            format!("{:?}", array.as_any().type_id())
-        }
         dt => format!("<{}>", dt),
     }
 }
+
+// ── tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {
