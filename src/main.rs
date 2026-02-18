@@ -3,8 +3,8 @@ mod grep;
 mod output;
 
 use anyhow::Result;
-use cli::Cli;
 use clap::Parser;
+use cli::Cli;
 use std::path::Path;
 use walkdir::WalkDir;
 
@@ -31,7 +31,10 @@ fn main() -> Result<()> {
             }
         }
         if !found_any {
-            eprintln!("No supported table files (.csv, .parquet) found in '{}'", cli.path);
+            eprintln!(
+                "No supported table files (.csv, .parquet, .pq, .parq) found in '{}'",
+                cli.path
+            );
         }
     } else {
         anyhow::bail!("'{}' is not a valid file or directory", cli.path);
@@ -40,9 +43,11 @@ fn main() -> Result<()> {
     Ok(())
 }
 
+/// Check if a file path is a supported file type, based on its extension.
 fn is_supported(path: &Path) -> bool {
+    // TODO: Could detect the file header, especially for parquet files.
     match path.extension().and_then(|e| e.to_str()) {
-        Some("csv") | Some("parquet") => true,
+        Some("csv") | Some("parquet") | Some("pq") | Some("parq") => true,
         _ => false,
     }
 }
