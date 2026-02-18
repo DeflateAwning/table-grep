@@ -46,8 +46,9 @@ fn main() -> Result<()> {
 /// Check if a file path is a supported file type, based on its extension.
 fn is_supported(path: &Path) -> bool {
     // TODO: Could detect the file header, especially for parquet files.
-    match path.extension().and_then(|e| e.to_str()) {
-        Some("csv") | Some("parquet") | Some("pq") | Some("parq") => true,
-        _ => false,
-    }
+
+    matches!(
+        path.extension().and_then(|e| e.to_str()),
+        Some("csv") | Some("parquet") | Some("pq") | Some("parq")
+    )
 }

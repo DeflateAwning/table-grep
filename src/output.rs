@@ -8,7 +8,10 @@ pub struct Printer {
 
 impl Printer {
     pub fn new(use_color: bool, show_filename: bool) -> Self {
-        Self { use_color, show_filename }
+        Self {
+            use_color,
+            show_filename,
+        }
     }
 
     pub fn print_file_header(&self, filename: &str) {
@@ -46,11 +49,7 @@ impl Printer {
 
     pub fn print_count(&self, filename: &str, count: usize) {
         if self.use_color {
-            println!(
-                "{}: {}",
-                filename.cyan(),
-                count.to_string().green().bold()
-            );
+            println!("{}: {}", filename.cyan(), count.to_string().green().bold());
         } else {
             println!("{}: {}", filename, count);
         }
