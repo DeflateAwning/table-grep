@@ -1,9 +1,11 @@
 [package]
 name = "table-grep"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 description = "A grep-like tool for searching CSV and Parquet table files"
-authors = []
+
+authors = ["DeflateAwning"]
+license = "BSD-3-Clause"
 
 [[bin]]
 name = "table-grep"
