@@ -1,6 +1,6 @@
 [package]
 name = "table-grep"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 description = "A grep-like tool for searching CSV and Parquet table files"
 
