@@ -332,3 +332,48 @@ fn array_value_to_string(array: &dyn arrow::array::Array, index: usize) -> Strin
         dt => format!("<{}>", dt),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn re(pattern: &str) -> Regex {
+        Regex::new(pattern).unwrap()
+    }
+
+    #[test]
+    fn test_row_matches_basic() {
+        let row = vec![
+            "Alice".to_string(),
+            "30".to_string(),
+            "Engineer".to_string(),
+        ];
+
+        // Positive match — pattern present in row
+        assert!(row_matches(&row, &re("Alice"), &None, false));
+
+        // No match — pattern absent
+        assert!(!row_matches(&row, &re("Bob"), &None, false));
+
+        // Inverted: absent pattern → true
+        assert!(row_matches(&row, &re("Bob"), &None, true));
+
+        // Inverted: present pattern → false
+        assert!(!row_matches(&row, &re("Alice"), &None, true));
+
+        // Column filter: match only in column 1 (age), pattern matches
+        assert!(row_matches(&row, &re("30"), &Some(vec![1]), false));
+
+        // Column filter: restrict to column 0 (name), numeric pattern should not match
+        assert!(!row_matches(&row, &re("30"), &Some(vec![0]), false));
+
+        // Regex: match on partial word
+        assert!(row_matches(&row, &re("Eng.*"), &None, false));
+
+        // Case sensitivity: lowercase should not match "Alice" by default
+        assert!(!row_matches(&row, &re("alice"), &None, false));
+
+        // Case insensitive via regex flag
+        assert!(row_matches(&row, &re("(?i)alice"), &None, false));
+    }
+}
