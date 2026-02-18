@@ -12,8 +12,8 @@ path = "src/main.rs"
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 csv = "1"
-parquet = { version = "52", features = ["arrow"] }
-arrow = { version = "52", features = ["prettyprint"] }
+parquet = { version = "57", features = ["arrow"] }
+arrow = { version = "57", features = ["prettyprint"] }
 regex = "1"
 anyhow = "1"
 colored = "2"
