@@ -7,6 +7,9 @@ description = "A grep-like tool for searching CSV and Parquet table files"
 authors = ["DeflateAwning"]
 license = "BSD-3-Clause"
 
+repository = "https://github.com/DeflateAwning/table-grep"
+homepage = "https://github.com/DeflateAwning/table-grep"
+
 [[bin]]
 name = "table-grep"
 path = "src/main.rs"

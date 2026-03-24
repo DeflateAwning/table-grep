@@ -77,22 +77,33 @@ table-grep --no-filename "error" ./logs/
 | CSV     | `.csv`     | Auto-detects headers; handles flexible/malformed CSVs |
 | Parquet | `.parquet`, `.pq`, `.parq` | Supports all Arrow scalar types; batch-streamed for memory efficiency |
 
-## Adding More Formats
+## Output Formats
 
-The architecture is modular — each format is handled in `src/grep.rs`. To add a new format (e.g., JSON Lines, TSV):
-
-1. Add a new branch in `src/main.rs`'s `is_supported()` function
-2. Add a `search_<format>` function in `src/grep.rs`
-3. Dispatch to it in `search_file()`
-
-## Output Format
+### CSV Output Format
 
 ```
-==> path/to/file.csv <==
-col1,col2,col3          ← column headers (dimmed)
-1: Alice,30,Engineer    ← row number: row contents (match highlighted in red)
+> table-grep Alice test_data/
+
+==> test_data/test_file_1.csv <==
+name,age,position
+3: Alice,30,Engineer
 5: Alice,28,Designer
 ---
+```
+
+### Table Output Format (`--format table`)
+
+```
+> table-grep -f table Alice test_data/
+
+==> test_data/test_file_1.csv <==
+┌───┬───────┬─────┬──────────┐
+│ # ┆ name  ┆ age ┆ position │
+╞═══╪═══════╪═════╪══════════╡
+│ 3 ┆ Alice ┆ 30  ┆ Engineer │
+├╌╌╌┼╌╌╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┤
+│ 5 ┆ Alice ┆ 28  ┆ Designer │
+└───┴───────┴─────┴──────────┘
 ```
 
 ## Inspiration
